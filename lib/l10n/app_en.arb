@@ -1,0 +1,17 @@
+{
+  "@@locale": "en",
+  "appName": "AnchorNight",
+  "nightGuardTab": "Night guard",
+  "morningTab": "My morning",
+  "groundingTab": "Grounding",
+  "imOkay": "I'm okay — stop now",
+  "enterSleep": "Enter sleep protection",
+  "supportToolOnly": "Support tool only — not a substitute for care.",
+  "bedPartnerMode": "Bed partner mode",
+  "companionAlert": "Companion alert",
+  "exportTherapist": "Export therapist summary",
+  "privacyPolicy": "Privacy policy",
+  "clinicalSafety": "Safety guidelines",
+  "analyticsOptIn": "Local analytics (opt-in)",
+  "language": "Language"
+}

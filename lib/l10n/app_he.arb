@@ -1,0 +1,17 @@
+{
+  "@@locale": "he",
+  "appName": "עוגן לילה",
+  "nightGuardTab": "הגנת לילה",
+  "morningTab": "הבוקר שלי",
+  "groundingTab": "קרקוע",
+  "imOkay": "אני בסדר — עצור עכשיו",
+  "enterSleep": "כניסה יזומה למצב שינה",
+  "supportToolOnly": "כלי תמיכה בלבד — אינו תחליף לטיפול.",
+  "bedPartnerMode": "מצב שותף במיטה",
+  "companionAlert": "התראת מלווה",
+  "exportTherapist": "ייצוא סיכום למטפל/ת",
+  "privacyPolicy": "מדיניות פרטיות",
+  "clinicalSafety": "הנחיות בטיחות",
+  "analyticsOptIn": "אנליטיקס מקומי (opt-in)",
+  "language": "שפה"
+}
