@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
@@ -23,6 +25,8 @@ class _GroundingScreenState extends State<GroundingScreen> {
   BreathPhase _phase = BreathPhase.inhale;
   int _secondsLeft = 4;
   bool _voiceGuideOn = true;
+  bool _voiceStarted = false;
+  String _voiceStatus = '';
 
   @override
   void initState() {
@@ -34,17 +38,45 @@ class _GroundingScreenState extends State<GroundingScreen> {
         _secondsLeft = seconds;
       });
     };
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (_voiceGuideOn) {
-        await _breathCoach.start();
-      }
-    });
+    _breathCoach.onStatus = (status) {
+      if (!mounted) return;
+      setState(() => _voiceStatus = status);
+    };
+    // Mobile can auto-start; web needs a tap (browser autoplay policy).
+    if (!kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_voiceGuideOn) {
+          unawaited(_startVoiceGuide());
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
     _breathCoach.dispose();
     super.dispose();
+  }
+
+  Future<void> _startVoiceGuide() async {
+    await _breathCoach.stop();
+    await _breathCoach.start();
+    if (!mounted) return;
+    setState(() {
+      _voiceGuideOn = true;
+      _voiceStarted = true;
+    });
+  }
+
+  Future<void> _toggleVoiceGuide(bool on) async {
+    setState(() => _voiceGuideOn = on);
+    if (on) {
+      await _startVoiceGuide();
+    } else {
+      await _breathCoach.stop();
+      if (!mounted) return;
+      setState(() => _voiceStarted = false);
+    }
   }
 
   Future<void> _dial(String phone) async {
@@ -210,15 +242,6 @@ class _GroundingScreenState extends State<GroundingScreen> {
     }
   }
 
-  Future<void> _toggleVoiceGuide(bool on) async {
-    setState(() => _voiceGuideOn = on);
-    if (on) {
-      await _breathCoach.start();
-    } else {
-      await _breathCoach.stop();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final controller = widget.controller;
@@ -255,16 +278,43 @@ class _GroundingScreenState extends State<GroundingScreen> {
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('הדרכה קולית לנשימה'),
-                  subtitle: const Text(
-                    'קול רגוע שמנחה שאיפה / החזקה / נשיפה',
-                    style: TextStyle(fontSize: 12, color: AnchorTheme.textMuted),
+                  subtitle: Text(
+                    _voiceStatus.isEmpty
+                        ? 'קול רגוע שמנחה שאיפה / החזקה / נשיפה'
+                        : _voiceStatus,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AnchorTheme.textMuted,
+                    ),
                   ),
                   value: _voiceGuideOn,
                   activeThumbColor: AnchorTheme.calm,
                   onChanged: _toggleVoiceGuide,
                 ),
+                if (!_voiceStarted || kIsWeb) ...[
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: _startVoiceGuide,
+                      icon: const Icon(Icons.volume_up),
+                      label: Text(
+                        _voiceStarted ? 'הפעל מחדש הדרכה' : 'הפעל הדרכה קולית',
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 _BreathCircle(phase: _phase, secondsLeft: _secondsLeft),
+                const SizedBox(height: 10),
+                Text(
+                  BreathingVoiceCoach.instructionHe(_phase),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AnchorTheme.calm,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(height: 22),
                 const _GroundingSteps(),
                 const SizedBox(height: 20),
