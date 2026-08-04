@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../app/theme.dart';
-import '../../domain/intervention_config.dart';
 import '../../domain/safety_profile.dart';
 import '../night_guard/night_guard_controller.dart';
 

@@ -1,7 +1,10 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+
 import 'heart_rate_source.dart';
 import 'platform_heart_rate_source.dart';
+import 'watch_connect_result.dart';
 
 enum HeartRateMode { demo, live }
 
@@ -15,26 +18,35 @@ class HeartRateCoordinator implements HeartRateSource {
 
   HeartRateMode _mode = HeartRateMode.demo;
   double? _overrideBpm;
-  double _current = 74;
   bool _running = false;
   String _lastError = '';
+  WatchConnectResult? _lastConnectResult;
+  VoidCallback? onChanged;
 
   HeartRateCoordinator({
     DemoHeartRateSource? demo,
     PlatformHeartRateSource? platform,
   })  : demo = demo ?? DemoHeartRateSource(),
-        platform = platform ?? PlatformHeartRateSource();
+        platform = platform ?? PlatformHeartRateSource() {
+    this.platform.onStatusChanged = () => onChanged?.call();
+  }
 
   HeartRateMode get mode => _mode;
-  bool get usingLiveWatch => _mode == HeartRateMode.live && platform.isLiveHardware;
+  bool get usingLiveWatch =>
+      _mode == HeartRateMode.live && platform.isLiveHardware;
+  bool get isWatchLinked => _mode == HeartRateMode.live && platform.isLinked;
+  bool get needsHealthConnectInstall => platform.needsHealthConnectInstall;
   String get lastError => _lastError;
+  WatchConnectResult? get lastConnectResult => _lastConnectResult;
 
   @override
   Stream<double> get heartRateBpm => _controller.stream;
 
   @override
   bool get isLiveHardware =>
-      _overrideBpm == null && _mode == HeartRateMode.live && platform.isLiveHardware;
+      _overrideBpm == null &&
+      _mode == HeartRateMode.live &&
+      platform.isLiveHardware;
 
   @override
   String get statusLabel {
@@ -60,29 +72,55 @@ class HeartRateCoordinator implements HeartRateSource {
   }
 
   /// מבקש הרשאות ומנסה לעבור לדופק חי.
-  Future<bool> connectWatch() async {
+  Future<WatchConnectResult> connectWatch() async {
     _lastError = '';
-    final granted = await platform.requestAuthorization();
-    if (!granted) {
-      _lastError = platform.statusLabel;
-      await useDemo();
-      return false;
+    if (kIsWeb) {
+      final result = const WatchConnectResult(
+        success: false,
+        message:
+            'בדפדפן אי אפשר לחבר שעון. התקינו את האפליקציה בטלפון Android/iPhone.',
+      );
+      _lastConnectResult = result;
+      _lastError = result.message;
+      onChanged?.call();
+      return result;
     }
+
+    final result = await platform.connect();
+    _lastConnectResult = result;
+    if (!result.success) {
+      _lastError = result.message;
+      await useDemo();
+      onChanged?.call();
+      return result;
+    }
+
     _mode = HeartRateMode.live;
     _overrideBpm = null;
     if (_running) {
       await _switchToLiveInternal();
+    } else {
+      // platform.connect already started polling; wire the stream.
+      await _activeSub?.cancel();
+      await demo.stop();
+      _activeSub = platform.heartRateBpm.listen(_onUpstream);
+      final last = platform.lastBpm;
+      if (last != null) _onUpstream(last);
     }
-    return true;
+    onChanged?.call();
+    return result;
   }
+
+  Future<void> installHealthConnect() => platform.installHealthConnect();
 
   Future<void> useDemo() async {
     _mode = HeartRateMode.demo;
     _overrideBpm = null;
-    await platform.stop();
+    await platform.disconnect();
     if (_running) {
       await _switchToDemoInternal();
     }
+    onChanged?.call();
   }
 
   void setDemoOverride(double? bpm) {
@@ -90,6 +128,7 @@ class HeartRateCoordinator implements HeartRateSource {
     if (_overrideBpm != null) {
       _emit(_overrideBpm!);
     }
+    onChanged?.call();
   }
 
   void clearOverride() => setDemoOverride(null);
@@ -106,7 +145,6 @@ class HeartRateCoordinator implements HeartRateSource {
     await demo.stop();
     await platform.start();
     _activeSub = platform.heartRateBpm.listen(_onUpstream);
-    // אם יש דגימה אחרונה — נפרסם מיד
     final last = platform.lastBpm;
     if (last != null) {
       _onUpstream(last);
@@ -122,7 +160,6 @@ class HeartRateCoordinator implements HeartRateSource {
   }
 
   void _emit(double bpm) {
-    _current = bpm;
     if (!_controller.isClosed) {
       _controller.add(bpm);
     }

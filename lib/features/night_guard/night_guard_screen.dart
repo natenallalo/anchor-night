@@ -5,7 +5,6 @@ import '../../app/theme.dart';
 import '../../domain/audio_anchor_catalog.dart';
 import '../../domain/intervention_config.dart';
 import '../../domain/night_guard_state.dart';
-import '../../sensors/heart_rate_coordinator.dart';
 import '../legal/privacy_screen.dart';
 import '../settings/care_settings_screen.dart';
 import 'night_guard_controller.dart';
@@ -204,12 +203,16 @@ class NightGuardScreen extends StatelessWidget {
                 _CheckRow(
                   title: 'מקור דופק',
                   value: controller.heartRateStatus,
-                  ok: controller.hasLiveHeartRate,
+                  ok: controller.isWatchLinked,
                 ),
                 _CheckRow(
                   title: 'דופק נוכחי',
-                  value: '${controller.heartRateBpm.round()} BPM',
-                  ok: true,
+                  value: controller.hasLiveHeartRate
+                      ? '${controller.heartRateBpm.round()} BPM (חי)'
+                      : controller.isWatchLinked
+                          ? 'ממתין לסנכרון מהשעון'
+                          : '${controller.heartRateBpm.round()} BPM (דמו)',
+                  ok: controller.hasLiveHeartRate,
                 ),
                 _CheckRow(
                   title: 'כיול אישי',
@@ -333,7 +336,8 @@ class _WatchConnectCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final live = controller.hasLiveHeartRate;
-    final mode = controller.heartRateMode;
+    final linked = controller.isWatchLinked;
+    final needsInstall = controller.needsHealthConnectInstall;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -348,8 +352,16 @@ class _WatchConnectCard extends StatelessWidget {
           Row(
             children: [
               Icon(
-                live ? Icons.watch : Icons.watch_off_outlined,
-                color: live ? AnchorTheme.calm : AnchorTheme.warn,
+                live
+                    ? Icons.watch
+                    : linked
+                        ? Icons.sync
+                        : Icons.watch_off_outlined,
+                color: live
+                    ? AnchorTheme.calm
+                    : linked
+                        ? AnchorTheme.warn
+                        : AnchorTheme.warn,
                 size: 20,
               ),
               const SizedBox(width: 8),
@@ -375,43 +387,77 @@ class _WatchConnectCard extends StatelessWidget {
           Text(
             live
                 ? 'המערכת משתמשת בדופק חי לזיהוי מדויק יותר.'
-                : 'בלי שעון — הזיהוי מוגבל. חברו Apple Watch / שעון עם Health Connect.',
+                : linked
+                    ? 'ההרשאה פעילה — ממתין לסנכרון דופק. ב־Samsung: Samsung Health → הגדרות → Health Connect → דופק.'
+                    : 'החיבור הוא דרך Health Connect / Apple Health (לא Bluetooth ישיר). בלי זה הזיהוי מוגבל.',
             style: const TextStyle(
               color: AnchorTheme.textPrimary,
               fontSize: 13,
               height: 1.35,
             ),
           ),
+          if (controller.heartRateLastError.isNotEmpty && !linked) ...[
+            const SizedBox(height: 6),
+            Text(
+              controller.heartRateLastError,
+              style: const TextStyle(color: AnchorTheme.danger, fontSize: 12),
+            ),
+          ],
           const SizedBox(height: 12),
-          if (mode != HeartRateMode.live || !live)
+          if (needsInstall) ...[
             ElevatedButton.icon(
               onPressed: () async {
-                final ok = await controller.connectWatch();
+                await controller.installHealthConnect();
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
+                  const SnackBar(
                     content: Text(
-                      ok
-                          ? 'הרשאה התקבלה — ממתין לסנכרון דופק מהשעון'
-                          : 'לא ניתן לחבר שעון. בדקו Health Connect / Apple Health.',
+                      'נפתחה חנות Play — התקינו Health Connect ואז לחצו שוב «חבר שעון»',
                     ),
                   ),
+                );
+              },
+              icon: const Icon(Icons.download),
+              label: const Text('התקן Health Connect'),
+            ),
+            const SizedBox(height: 8),
+          ],
+          if (!linked)
+            ElevatedButton.icon(
+              onPressed: () async {
+                final result = await controller.connectWatch();
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(result.message)),
                 );
               },
               icon: const Icon(Icons.link),
               label: const Text('חבר שעון / Health'),
             )
-          else
+          else ...[
+            if (!live)
+              TextButton.icon(
+                onPressed: () async {
+                  final result = await controller.connectWatch();
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(result.message)),
+                  );
+                },
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('רענן קריאת דופק'),
+              ),
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
                 foregroundColor: AnchorTheme.textPrimary,
                 side: const BorderSide(color: AnchorTheme.accentSoft),
-                minimumSize: const Size.fromHeight(48),
+                minimumSize: const Size(120, 48),
               ),
               onPressed: controller.useDemoHeartRate,
               icon: const Icon(Icons.link_off),
               label: const Text('נתק ועבור לדמו'),
             ),
+          ],
         ],
       ),
     );
@@ -561,12 +607,15 @@ class _VoiceAnchorCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasVoice = controller.config.customAudioPath != null;
+    final recording = controller.recordingVoice;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AnchorTheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white10),
+        border: Border.all(
+          color: recording ? AnchorTheme.danger.withValues(alpha: 0.5) : Colors.white10,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -580,35 +629,64 @@ class _VoiceAnchorCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            hasVoice
-                ? 'יש הקלטה שמורה — תופעל בעדינות בזמן התערבות'
-                : 'הקליטו קול מוכר (בן/בת זוג, ילד, אתם) — זה העוגן החזק ביותר',
-            style: const TextStyle(color: AnchorTheme.textMuted, fontSize: 13, height: 1.35),
+            recording
+                ? 'מקליט עכשיו… דברו ברוגע 5–15 שניות, ואז לחצו לעצור ולשמור'
+                : hasVoice
+                    ? 'יש הקלטה שמורה — תופעל בעדינות בזמן התערבות'
+                    : 'הקליטו קול מוכר (בן/בת זוג, ילד, אתם) — זה העוגן החזק ביותר',
+            style: TextStyle(
+              color: recording ? AnchorTheme.danger : AnchorTheme.textMuted,
+              fontSize: 13,
+              height: 1.35,
+            ),
           ),
           const SizedBox(height: 12),
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: controller.recordingVoice
-                  ? AnchorTheme.danger
-                  : AnchorTheme.accentSoft,
+              backgroundColor:
+                  recording ? AnchorTheme.danger : AnchorTheme.accentSoft,
+              minimumSize: const Size(120, 48),
             ),
             onPressed: () async {
-              if (controller.recordingVoice) {
-                await controller.stopVoiceAnchorRecording();
+              if (recording) {
+                final result = await controller.stopVoiceAnchorRecording();
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(result.message)),
+                );
               } else {
-                final ok = await controller.startVoiceAnchorRecording();
-                if (!ok && context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('נדרשת הרשאת מיקרופון')),
-                  );
-                }
+                final result = await controller.startVoiceAnchorRecording();
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(result.message)),
+                );
               }
             },
-            icon: Icon(controller.recordingVoice ? Icons.stop : Icons.mic),
+            icon: Icon(recording ? Icons.stop : Icons.mic),
             label: Text(
-              controller.recordingVoice ? 'עצור הקלטה ושמור' : 'הקלט עוגן קולי',
+              recording ? 'עצור הקלטה ושמור' : 'הקלט עוגן קולי',
             ),
           ),
+          if (hasVoice && !recording) ...[
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: () async {
+                final c = controller.config;
+                if (c.selectedAudioAnchorId != 'custom_voice') {
+                  await controller.updateConfig(
+                    c.copyWith(selectedAudioAnchorId: 'custom_voice'),
+                  );
+                }
+                await controller.previewSelectedAudio();
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('מנגן האזנה מקדימה לעוגן האישי')),
+                );
+              },
+              icon: const Icon(Icons.headphones, size: 18),
+              label: const Text('האזן להקלטה'),
+            ),
+          ],
         ],
       ),
     );

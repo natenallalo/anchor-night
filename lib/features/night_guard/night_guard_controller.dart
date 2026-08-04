@@ -12,8 +12,10 @@ import '../../domain/personal_baseline.dart';
 import '../../domain/priority_contact.dart';
 import '../../domain/sensor_sample.dart';
 import '../../intervention/intervention_controller.dart';
+import '../../intervention/recording_result.dart';
 import '../../sensors/heart_rate_coordinator.dart';
 import '../../sensors/sensor_hub.dart';
+import '../../sensors/watch_connect_result.dart';
 import '../../services/companion_alert_service.dart';
 import '../../services/night_background_service.dart';
 import '../../services/soft_analytics.dart';
@@ -77,6 +79,9 @@ class NightGuardController extends ChangeNotifier {
   bool get recordingVoice => _recordingVoice;
   bool get isCalibrated => baseline.isCalibrated;
   bool get hasLiveHeartRate => sensors.hasLiveHeartRate;
+  bool get isWatchLinked => sensors.isWatchLinked;
+  bool get needsHealthConnectInstall => sensors.needsHealthConnectInstall;
+  String get heartRateLastError => sensors.heartRateLastError;
   HeartRateMode get heartRateMode => sensors.heartRateMode;
   bool get backgroundActive => _backgroundActive;
   List<PriorityContact> get contacts => List.unmodifiable(_contacts);
@@ -167,13 +172,17 @@ class NightGuardController extends ChangeNotifier {
     );
   }
 
-  Future<bool> connectWatch() async {
-    final ok = await sensors.connectWatch();
-    _statusDetail = ok
-        ? 'מנסה לקרוא דופק מהשעון — ודא סנכרון Health / Health Connect'
-        : 'לא חובר שעון — ממשיכים בדופק מדומה';
+  Future<WatchConnectResult> connectWatch() async {
+    final result = await sensors.connectWatch();
+    _statusDetail = result.message;
     notifyListeners();
-    return ok;
+    return result;
+  }
+
+  Future<void> installHealthConnect() async {
+    await sensors.installHealthConnect();
+    _statusDetail = sensors.heartRateStatus;
+    notifyListeners();
   }
 
   Future<void> useDemoHeartRate() async {
@@ -355,25 +364,31 @@ class NightGuardController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> startVoiceAnchorRecording() async {
-    final ok = await intervention.audio.startRecordingAnchor();
-    _recordingVoice = ok;
+  Future<RecordingResult> startVoiceAnchorRecording() async {
+    final result = await intervention.audio.startRecordingAnchor();
+    _recordingVoice = result.success;
+    _statusDetail = result.message;
     notifyListeners();
-    return ok;
+    return result;
   }
 
-  Future<void> stopVoiceAnchorRecording() async {
-    final path = await intervention.audio.stopRecordingAnchor();
+  Future<RecordingResult> stopVoiceAnchorRecording() async {
+    final result = await intervention.audio.stopRecordingAnchor();
     _recordingVoice = false;
-    if (path != null) {
+    if (result.success && result.path != null) {
       _config = _config.copyWith(
-        customAudioPath: path,
+        customAudioPath: result.path,
         selectedAudioAnchorId: 'custom_voice',
+        voiceAnchorPreviewed: false,
       );
+      await intervention.audio.setCustomRecordingPath(result.path);
       await store.saveConfig(_config);
-      _statusDetail = 'עוגן קולי נשמר';
+      _statusDetail = 'עוגן קולי נשמר — מומלץ להאזין מקדימה';
+    } else {
+      _statusDetail = result.message;
     }
     notifyListeners();
+    return result;
   }
 
   Future<void> _beginSession() async {

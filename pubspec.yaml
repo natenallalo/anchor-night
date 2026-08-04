@@ -1,7 +1,7 @@
 name: anchor_night
 description: עוגן לילה — הגנה דינמית ללילה עבור מתמודדי פוסט־טראומה.
 publish_to: "none"
-version: 0.4.0+5
+version: 0.4.2+7
 
 environment:
   sdk: ">=3.5.0 <4.0.0"

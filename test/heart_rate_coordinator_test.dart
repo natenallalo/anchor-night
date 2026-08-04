@@ -7,6 +7,7 @@ void main() {
     await coordinator.start();
     expect(coordinator.mode, HeartRateMode.demo);
     expect(coordinator.isLiveHardware, isFalse);
+    expect(coordinator.isWatchLinked, isFalse);
     await coordinator.stop();
     coordinator.dispose();
   });
@@ -24,6 +25,18 @@ void main() {
     expect(values.last, 110);
 
     await sub.cancel();
+    await coordinator.stop();
+    coordinator.dispose();
+  });
+
+  test('connectWatch on unsupported path returns failure message', () async {
+    final coordinator = HeartRateCoordinator();
+    await coordinator.start();
+    // In unit tests there is no Health Connect / HealthKit runtime.
+    final result = await coordinator.connectWatch();
+    expect(result.success, isFalse);
+    expect(result.message, isNotEmpty);
+    expect(coordinator.mode, HeartRateMode.demo);
     await coordinator.stop();
     coordinator.dispose();
   });
