@@ -37,6 +37,12 @@ class NightSession {
   final bool usedLiveHeartRate;
   final MorningCheckIn? checkIn;
 
+  /// Context captured for insight engine.
+  final String? audioAnchorId;
+  final String? interventionMode;
+  final String? intensity;
+  final bool bedPartnerMode;
+
   const NightSession({
     required this.id,
     required this.startedAt,
@@ -45,6 +51,10 @@ class NightSession {
     this.groundingCount = 0,
     this.usedLiveHeartRate = false,
     this.checkIn,
+    this.audioAnchorId,
+    this.interventionMode,
+    this.intensity,
+    this.bedPartnerMode = false,
   });
 
   Duration get duration {
@@ -58,6 +68,10 @@ class NightSession {
     int? groundingCount,
     bool? usedLiveHeartRate,
     MorningCheckIn? checkIn,
+    String? audioAnchorId,
+    String? interventionMode,
+    String? intensity,
+    bool? bedPartnerMode,
   }) {
     return NightSession(
       id: id,
@@ -67,6 +81,10 @@ class NightSession {
       groundingCount: groundingCount ?? this.groundingCount,
       usedLiveHeartRate: usedLiveHeartRate ?? this.usedLiveHeartRate,
       checkIn: checkIn ?? this.checkIn,
+      audioAnchorId: audioAnchorId ?? this.audioAnchorId,
+      interventionMode: interventionMode ?? this.interventionMode,
+      intensity: intensity ?? this.intensity,
+      bedPartnerMode: bedPartnerMode ?? this.bedPartnerMode,
     );
   }
 
@@ -78,6 +96,10 @@ class NightSession {
         'groundingCount': groundingCount,
         'usedLiveHeartRate': usedLiveHeartRate,
         'checkIn': checkIn?.toJson(),
+        'audioAnchorId': audioAnchorId,
+        'interventionMode': interventionMode,
+        'intensity': intensity,
+        'bedPartnerMode': bedPartnerMode,
       };
 
   factory NightSession.fromJson(Map<String, dynamic> json) {
@@ -94,6 +116,10 @@ class NightSession {
       checkIn: json['checkIn'] is Map<String, dynamic>
           ? MorningCheckIn.fromJson(json['checkIn'] as Map<String, dynamic>)
           : null,
+      audioAnchorId: json['audioAnchorId'] as String?,
+      interventionMode: json['interventionMode'] as String?,
+      intensity: json['intensity'] as String?,
+      bedPartnerMode: json['bedPartnerMode'] as bool? ?? false,
     );
   }
 }

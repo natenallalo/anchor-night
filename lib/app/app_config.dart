@@ -11,7 +11,7 @@ class AppConfig {
 
   /// קישור ציבורי למדיניות פרטיות — עדכנו אחרי GitHub Pages.
   static const privacyPolicyUrl =
-      'https://YOUR_GITHUB_USER.github.io/anchor-night/privacy.html';
+      'https://natenallalo.github.io/anchor-night/privacy.html';
 
   static const packageId = 'com.anchornight.app.anchor_night';
 }

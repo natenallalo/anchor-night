@@ -1,3 +1,5 @@
+import 'audio_anchor_catalog.dart';
+
 enum InterventionMode { combined, vibrationOnly, audioOnly }
 
 enum VibrationStyle { breath46, shortPulses, longSoft }
@@ -60,18 +62,8 @@ class InterventionConfig {
   double get maxAudioVolume =>
       intensity == StimulusIntensity.gentle ? 0.40 : 0.65;
 
-  String? get builtInAssetPath {
-    switch (selectedAudioAnchorId) {
-      case 'rain':
-        return 'assets/audio/rain.wav';
-      case 'white_noise':
-        return 'assets/audio/white_noise.wav';
-      case 'soft_tone':
-        return 'assets/audio/soft_tone.wav';
-      default:
-        return null;
-    }
-  }
+  String? get builtInAssetPath =>
+      AudioAnchorCatalog.assetPathFor(selectedAudioAnchorId);
 
   InterventionConfig copyWith({
     InterventionMode? mode,

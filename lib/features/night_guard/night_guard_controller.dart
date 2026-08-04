@@ -17,6 +17,7 @@ import '../../sensors/sensor_hub.dart';
 import '../../services/companion_alert_service.dart';
 import '../../services/night_background_service.dart';
 import '../../services/soft_analytics.dart';
+import '../../services/insight_engine.dart';
 import '../../services/therapist_report.dart';
 import '../../storage/night_store.dart';
 
@@ -86,6 +87,8 @@ class NightGuardController extends ChangeNotifier {
   Duration? get companionRemaining => companionAlert.remaining;
   bool get analyticsOptIn => _analyticsOptIn;
   Locale get locale => _locale;
+
+  NightInsight get currentInsight => InsightEngine().analyze(_sessions);
 
   Future<void> boot() async {
     if (_booted) return;
@@ -378,6 +381,10 @@ class NightGuardController extends ChangeNotifier {
       id: const Uuid().v4(),
       startedAt: DateTime.now(),
       usedLiveHeartRate: hasLiveHeartRate,
+      audioAnchorId: _config.selectedAudioAnchorId,
+      interventionMode: _config.mode.name,
+      intensity: _config.intensity.name,
+      bedPartnerMode: _config.bedPartnerMode,
     );
   }
 
@@ -387,6 +394,10 @@ class NightGuardController extends ChangeNotifier {
         id: const Uuid().v4(),
         startedAt: DateTime.now().subtract(const Duration(hours: 1)),
         usedLiveHeartRate: hasLiveHeartRate,
+        audioAnchorId: _config.selectedAudioAnchorId,
+        interventionMode: _config.mode.name,
+        intensity: _config.intensity.name,
+        bedPartnerMode: _config.bedPartnerMode,
       );
     }
     final completed = _activeSession!.copyWith(endedAt: DateTime.now());

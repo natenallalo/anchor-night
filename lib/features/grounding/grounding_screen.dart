@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -5,12 +6,46 @@ import 'package:uuid/uuid.dart';
 
 import '../../app/theme.dart';
 import '../../domain/priority_contact.dart';
+import '../../intervention/breathing_voice_coach.dart';
 import '../night_guard/night_guard_controller.dart';
 
-class GroundingScreen extends StatelessWidget {
+class GroundingScreen extends StatefulWidget {
   final NightGuardController controller;
 
   const GroundingScreen({super.key, required this.controller});
+
+  @override
+  State<GroundingScreen> createState() => _GroundingScreenState();
+}
+
+class _GroundingScreenState extends State<GroundingScreen> {
+  final _breathCoach = BreathingVoiceCoach();
+  BreathPhase _phase = BreathPhase.inhale;
+  int _secondsLeft = 4;
+  bool _voiceGuideOn = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _breathCoach.onTick = (phase, seconds) {
+      if (!mounted) return;
+      setState(() {
+        _phase = phase;
+        _secondsLeft = seconds;
+      });
+    };
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (_voiceGuideOn) {
+        await _breathCoach.start();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _breathCoach.dispose();
+    super.dispose();
+  }
 
   Future<void> _dial(String phone) async {
     final cleaned = phone.replaceAll(RegExp(r'[^\d+]'), '');
@@ -20,42 +55,173 @@ class GroundingScreen extends StatelessWidget {
     }
   }
 
-  Future<void> _importContact(BuildContext context) async {
-    final granted = await FlutterContacts.requestPermission();
-    if (!granted) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('נדרשת הרשאה לאנשי קשר')),
-        );
-      }
+  Future<void> _addManualContact() async {
+    final nameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AnchorTheme.surfaceElevated,
+        title: const Text('הוספת איש קשר'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(labelText: 'שם'),
+              textInputAction: TextInputAction.next,
+            ),
+            TextField(
+              controller: phoneCtrl,
+              decoration: const InputDecoration(labelText: 'טלפון'),
+              keyboardType: TextInputType.phone,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('ביטול'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('שמור'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final name = nameCtrl.text.trim();
+    final phone = phoneCtrl.text.trim();
+    if (name.isEmpty || phone.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('נא למלא שם ומספר טלפון')),
+      );
       return;
     }
-    final contact = await FlutterContacts.openExternalPick();
-    if (contact == null) return;
-    final full = await FlutterContacts.getContact(contact.id);
-    final phone = full?.phones.isNotEmpty == true
-        ? full!.phones.first.number
-        : '';
-    if (phone.isEmpty) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('לא נמצא מספר טלפון')),
-        );
-      }
-      return;
-    }
-    await controller.addContact(
+    await widget.controller.addContact(
       PriorityContact(
         id: const Uuid().v4(),
-        name: contact.displayName,
+        name: name,
         phone: phone,
         relationship: 'איש קשר לחירום',
       ),
     );
   }
 
+  Future<void> _importContact() async {
+    if (kIsWeb) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('ביב אין גישה לאנשי קשר — הוסיפו ידנית'),
+        ),
+      );
+      await _addManualContact();
+      return;
+    }
+
+    try {
+      final granted = await FlutterContacts.requestPermission(readonly: true);
+      if (!granted) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('נדרשת הרשאה לאנשי קשר בהגדרות המכשיר'),
+          ),
+        );
+        return;
+      }
+
+      final picked = await FlutterContacts.openExternalPick();
+      if (picked == null) return;
+
+      Contact? full;
+      if (picked.id.isNotEmpty) {
+        full = await FlutterContacts.getContact(
+          picked.id,
+          withProperties: true,
+          withPhoto: false,
+        );
+      }
+
+      final name = (full?.displayName.isNotEmpty == true)
+          ? full!.displayName
+          : (picked.displayName.isNotEmpty
+              ? picked.displayName
+              : 'איש קשר');
+
+      String phone = '';
+      final phones = full?.phones ?? picked.phones;
+      if (phones.isNotEmpty) {
+        phone = phones.first.number;
+      }
+
+      if (phone.trim().isEmpty) {
+        if (!mounted) return;
+        final phoneCtrl = TextEditingController();
+        final typed = await showDialog<String>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: AnchorTheme.surfaceElevated,
+            title: Text('מספר ל־$name'),
+            content: TextField(
+              controller: phoneCtrl,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(labelText: 'טלפון'),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('ביטול'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, phoneCtrl.text.trim()),
+                child: const Text('שמור'),
+              ),
+            ],
+          ),
+        );
+        if (typed == null || typed.isEmpty) return;
+        phone = typed;
+      }
+
+      await widget.controller.addContact(
+        PriorityContact(
+          id: const Uuid().v4(),
+          name: name,
+          phone: phone,
+          relationship: 'איש קשר לחירום',
+        ),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('נוסף: $name')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('ייבוא נכשל — הוסיפו ידנית. ($e)'),
+        ),
+      );
+      await _addManualContact();
+    }
+  }
+
+  Future<void> _toggleVoiceGuide(bool on) async {
+    setState(() => _voiceGuideOn = on);
+    if (on) {
+      await _breathCoach.start();
+    } else {
+      await _breathCoach.stop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final controller = widget.controller;
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
@@ -85,8 +251,20 @@ class GroundingScreen extends StatelessWidget {
                   'זהו רגע קשה — לא סכנה בהווה. ננשום יחד, לאט.',
                   style: TextStyle(color: AnchorTheme.textMuted, height: 1.4),
                 ),
-                const SizedBox(height: 22),
-                _BreathCircle(progress: dawnIntensity),
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('הדרכה קולית לנשימה'),
+                  subtitle: const Text(
+                    'קול רגוע שמנחה שאיפה / החזקה / נשיפה',
+                    style: TextStyle(fontSize: 12, color: AnchorTheme.textMuted),
+                  ),
+                  value: _voiceGuideOn,
+                  activeThumbColor: AnchorTheme.calm,
+                  onChanged: _toggleVoiceGuide,
+                ),
+                const SizedBox(height: 8),
+                _BreathCircle(phase: _phase, secondsLeft: _secondsLeft),
                 const SizedBox(height: 22),
                 const _GroundingSteps(),
                 const SizedBox(height: 20),
@@ -94,9 +272,12 @@ class GroundingScreen extends StatelessWidget {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AnchorTheme.calm,
                     foregroundColor: const Color(0xFF0B1410),
-                    minimumSize: const Size.fromHeight(58),
+                    minimumSize: const Size(120, 58),
                   ),
-                  onPressed: controller.imOkayStopIntervention,
+                  onPressed: () async {
+                    await _breathCoach.stop();
+                    controller.imOkayStopIntervention();
+                  },
                   child: const Text('אני בסדר — עצור התערבות'),
                 ),
                 const SizedBox(height: 10),
@@ -104,7 +285,7 @@ class GroundingScreen extends StatelessWidget {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AnchorTheme.textPrimary,
                     side: const BorderSide(color: AnchorTheme.accentSoft),
-                    minimumSize: const Size.fromHeight(50),
+                    minimumSize: const Size(120, 50),
                   ),
                   onPressed: controller.returnToNightProtection,
                   child: const Text('חזרתי לנשום — המשך הגנת לילה'),
@@ -122,7 +303,12 @@ class GroundingScreen extends StatelessWidget {
                       ),
                     ),
                     TextButton.icon(
-                      onPressed: () => _importContact(context),
+                      onPressed: _addManualContact,
+                      icon: const Icon(Icons.edit, size: 18),
+                      label: const Text('הוסף'),
+                    ),
+                    TextButton.icon(
+                      onPressed: _importContact,
                       icon: const Icon(Icons.person_add_alt, size: 18),
                       label: const Text('ייבא'),
                     ),
@@ -132,7 +318,7 @@ class GroundingScreen extends StatelessWidget {
                   const Padding(
                     padding: EdgeInsets.only(bottom: 12),
                     child: Text(
-                      'לא הוגדרו אנשי קשר. אפשר לייבא מהטלפון.',
+                      'לא הוגדרו אנשי קשר. אפשר לייבא מהטלפון או להוסיף ידנית.',
                       style: TextStyle(color: AnchorTheme.textMuted, fontSize: 13),
                     ),
                   )
@@ -192,18 +378,26 @@ class GroundingScreen extends StatelessWidget {
 }
 
 class _BreathCircle extends StatelessWidget {
-  final double progress;
-  const _BreathCircle({required this.progress});
+  final BreathPhase phase;
+  final int secondsLeft;
+  const _BreathCircle({required this.phase, required this.secondsLeft});
 
   @override
   Widget build(BuildContext context) {
-    final scale = 0.85 + (progress * 0.2);
+    final scale = switch (phase) {
+      BreathPhase.inhale => 0.92 + (4 - secondsLeft) * 0.05,
+      BreathPhase.hold => 1.12,
+      BreathPhase.exhale => 1.12 - (6 - secondsLeft) * 0.04,
+      BreathPhase.rest => 0.88,
+    };
     return Center(
-      child: Transform.scale(
-        scale: scale,
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 700),
+        curve: Curves.easeInOut,
+        scale: scale.clamp(0.85, 1.2),
         child: Container(
-          width: 160,
-          height: 160,
+          width: 170,
+          height: 170,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
@@ -215,12 +409,13 @@ class _BreathCircle extends StatelessWidget {
             ),
             border: Border.all(color: AnchorTheme.accent.withValues(alpha: 0.45)),
           ),
-          child: const Text(
-            'שאיפה 4\nהפסקה\nנשיפה 6',
+          child: Text(
+            '${BreathingVoiceCoach.labelHe(phase)}\n$secondsLeft',
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               height: 1.35,
-              fontWeight: FontWeight.w600,
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
               color: AnchorTheme.textPrimary,
             ),
           ),

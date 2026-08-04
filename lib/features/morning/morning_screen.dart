@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../app/theme.dart';
 import '../../domain/night_guard_state.dart';
 import '../../domain/night_session.dart';
+import '../../services/insight_engine.dart';
 import '../night_guard/night_guard_controller.dart';
 
 class MorningScreen extends StatefulWidget {
@@ -55,6 +56,8 @@ class _MorningScreenState extends State<MorningScreen> {
               const SizedBox(height: 18),
               _SessionCard(session: session),
             ],
+            const SizedBox(height: 18),
+            _InsightCard(insight: c.currentInsight),
             if (isMorning) ...[
               const SizedBox(height: 22),
               const Text(
@@ -190,6 +193,97 @@ class _SessionCard extends StatelessWidget {
               style: const TextStyle(color: AnchorTheme.calm, fontSize: 13),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _InsightCard extends StatelessWidget {
+  final NightInsight insight;
+  const _InsightCard({required this.insight});
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = (insight.confidence * 100).round();
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AnchorTheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AnchorTheme.accentSoft.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'תובנות מהנתונים שלך',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: AnchorTheme.accent,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            insight.headline,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: AnchorTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'רמת ודאות לדפוס: $pct% (לא דיוק רפואי)',
+            style: const TextStyle(color: AnchorTheme.textMuted, fontSize: 12),
+          ),
+          if (insight.whatHelped.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Text(
+              'מה שנראה שעזר',
+              style: TextStyle(fontWeight: FontWeight.w700, color: AnchorTheme.calm),
+            ),
+            ...insight.whatHelped.map(
+              (t) => Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('• $t',
+                    style: const TextStyle(color: AnchorTheme.textPrimary, height: 1.35)),
+              ),
+            ),
+          ],
+          if (insight.whatMayHelp.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Text(
+              'מה עשוי לעזור בהמשך',
+              style: TextStyle(fontWeight: FontWeight.w700, color: AnchorTheme.warn),
+            ),
+            ...insight.whatMayHelp.map(
+              (t) => Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('• $t',
+                    style: const TextStyle(color: AnchorTheme.textPrimary, height: 1.35)),
+              ),
+            ),
+          ],
+          if (insight.patterns.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Text(
+              'דפוסים',
+              style: TextStyle(fontWeight: FontWeight.w700, color: AnchorTheme.textPrimary),
+            ),
+            ...insight.patterns.map(
+              (t) => Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('• $t',
+                    style: const TextStyle(color: AnchorTheme.textMuted, height: 1.35)),
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Text(
+            insight.disclaimer,
+            style: const TextStyle(color: AnchorTheme.textMuted, fontSize: 11, height: 1.35),
+          ),
         ],
       ),
     );

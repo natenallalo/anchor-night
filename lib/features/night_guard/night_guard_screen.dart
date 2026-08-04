@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_config.dart';
 import '../../app/theme.dart';
+import '../../domain/audio_anchor_catalog.dart';
 import '../../domain/intervention_config.dart';
 import '../../domain/night_guard_state.dart';
 import '../../sensors/heart_rate_coordinator.dart';
@@ -512,20 +513,23 @@ class _PreferencesCard extends StatelessWidget {
           ),
           DropdownButton<String>(
             isExpanded: true,
-            value: c.selectedAudioAnchorId == 'custom_voice' &&
-                    c.customAudioPath == null
-                ? 'rain'
-                : c.selectedAudioAnchorId,
+            value: () {
+              final id = c.selectedAudioAnchorId;
+              if (id == 'custom_voice') {
+                return c.customAudioPath == null ? 'rain' : id;
+              }
+              final known = AudioAnchorCatalog.byId(id) != null;
+              return known ? id : 'rain';
+            }(),
             dropdownColor: AnchorTheme.surfaceElevated,
             items: [
-              const DropdownMenuItem(value: 'rain', child: Text('גשם עמום')),
-              const DropdownMenuItem(
-                value: 'white_noise',
-                child: Text('רעש לבן / ורוד עדין'),
-              ),
-              const DropdownMenuItem(
-                value: 'soft_tone',
-                child: Text('טון נמוך רך'),
+              ...AudioAnchorCatalog.builtIns.map(
+                (o) => DropdownMenuItem(
+                  value: o.id,
+                  child: Text(
+                    o.isMusic ? '${o.labelHe} · מוזיקה' : o.labelHe,
+                  ),
+                ),
               ),
               if (c.customAudioPath != null)
                 const DropdownMenuItem(
