@@ -185,6 +185,18 @@ class NightGuardController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> openHealthConnectStore() async {
+    await sensors.openHealthConnectStore();
+    _statusDetail = sensors.heartRateStatus;
+    notifyListeners();
+  }
+
+  Future<void> openSamsungHealth() async {
+    await sensors.openSamsungHealth();
+    _statusDetail = sensors.heartRateStatus;
+    notifyListeners();
+  }
+
   Future<void> useDemoHeartRate() async {
     await sensors.useDemoHeartRate();
     _statusDetail = 'חזרה לדופק מדומה';

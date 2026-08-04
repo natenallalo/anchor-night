@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:health/health.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'watch_connect_result.dart';
 
@@ -21,12 +23,10 @@ class PlatformHeartRateSource implements HeartRateSourceLike {
   String _status = 'שעון לא מחובר';
   VoidCallback? onStatusChanged;
 
-  static const _types = [HealthDataType.HEART_RATE];
-  static const _permissions = [HealthDataAccess.READ];
-  // Samsung Health → Health Connect sync is often sparse; keep a wider window.
-  static const _freshness = Duration(minutes: 10);
-  static const _lookback = Duration(minutes: 30);
-  static const _pollEvery = Duration(seconds: 4);
+  // Samsung sync can lag; keep a wide discovery window.
+  static const _freshness = Duration(minutes: 15);
+  static const _lookback = Duration(hours: 24);
+  static const _pollEvery = Duration(seconds: 3);
   static const _fastPollEvery = Duration(seconds: 2);
 
   PlatformHeartRateSource({Health? health}) : _health = health ?? Health();
@@ -34,12 +34,10 @@ class PlatformHeartRateSource implements HeartRateSourceLike {
   @override
   Stream<double> get heartRateBpm => _controller.stream;
 
-  /// מורשה + יש דגימה בחלון הסביר.
   @override
   bool get isLiveHardware =>
       _authorized && hasUsableData && _lastBpm != null;
 
-  /// מורשה למצב חי (גם בלי דגימה טרייה עדיין).
   bool get isLinked => _authorized;
 
   bool get needsHealthConnectInstall => _needsHealthConnectInstall;
@@ -67,7 +65,8 @@ class PlatformHeartRateSource implements HeartRateSourceLike {
 
   Future<bool> ensureConfigured() async {
     if (_unsupportedPlatform) {
-      _status = 'חיבור שעון זמין רק באפליקציית Android / iPhone';
+      _status =
+          'חיבור שעון זמין רק באפליקציה על הטלפון (לא בדפדפן)';
       _emitStatus();
       return false;
     }
@@ -84,24 +83,29 @@ class PlatformHeartRateSource implements HeartRateSourceLike {
     }
   }
 
+  Future<void> _requestAndroidRuntimePerms() async {
+    if (!_isAndroid) return;
+    try {
+      await Permission.activityRecognition.request();
+    } catch (_) {}
+  }
+
   Future<bool> _ensureHealthConnectReady() async {
     _needsHealthConnectInstall = false;
     if (_unsupportedPlatform) return false;
-    if (kIsWeb) return false;
     if (!_isAndroid) return true;
 
     try {
+      final available = await _health.isHealthConnectAvailable();
+      if (available) return true;
+
       final status = await _health.getHealthConnectSdkStatus();
-      if (status == HealthConnectSdkStatus.sdkAvailable) {
-        return true;
-      }
       _needsHealthConnectInstall = true;
       if (status == HealthConnectSdkStatus.sdkUnavailableProviderUpdateRequired) {
-        _status =
-            'יש לעדכן את Health Connect מחנות Play, ואז לחזור לכאן';
+        _status = 'יש לעדכן את Health Connect מחנות Play, ואז לחזור לכאן';
       } else {
         _status =
-            'יש להתקין Google Health Connect (חובה לחיבור שעון באנדרואיד)';
+            'חובה להתקין Google Health Connect לפני חיבור שעון באנדרואיד';
       }
       _emitStatus();
       return false;
@@ -118,22 +122,57 @@ class PlatformHeartRateSource implements HeartRateSourceLike {
     if (_unsupportedPlatform || !_isAndroid) return;
     try {
       await _health.installHealthConnect();
-      _status = 'נפתחה חנות Play להתקנת Health Connect — אחרי ההתקנה לחצו שוב «חבר שעון»';
+      _status =
+          'נפתחה חנות Play — התקינו Health Connect ואז לחצו שוב «חבר שעון»';
       _emitStatus();
     } catch (e) {
-      _status = 'לא ניתן לפתוח התקנת Health Connect';
+      // Fallback: open Play Store page directly.
+      await openHealthConnectStore();
       debugPrint('installHealthConnect failed: $e');
+    }
+  }
+
+  Future<void> openHealthConnectStore() async {
+    final uri = Uri.parse(
+      'https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata',
+    );
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+      _status = 'נפתחה חנות Play ל־Health Connect';
+      _emitStatus();
+    } catch (e) {
+      _status = 'לא ניתן לפתוח את חנות Play';
       _emitStatus();
     }
   }
 
-  /// מחבר הרשאות Health + מתחיל קריאה. מחזיר תוצאה מפורטת ל־UI.
+  Future<void> openSamsungHealth() async {
+    final candidates = <Uri>[
+      Uri.parse('samsunghealth://'),
+      Uri.parse('https://play.google.com/store/apps/details?id=com.sec.android.app.shealth'),
+    ];
+    for (final uri in candidates) {
+      try {
+        final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (ok) {
+          _status =
+              'נפתח Samsung Health — הפעילו סנכרון דופק ל־Health Connect';
+          _emitStatus();
+          return;
+        }
+      } catch (_) {}
+    }
+    _status = 'לא ניתן לפתוח Samsung Health אוטומטית';
+    _emitStatus();
+  }
+
+  /// מחבר הרשאות Health + מתחיל קריאה.
   Future<WatchConnectResult> connect() async {
     if (_unsupportedPlatform) {
       return const WatchConnectResult(
         success: false,
         message:
-            'בדפדפן אי אפשר לחבר שעון. התקינו את האפליקציה בטלפון.',
+            'בדפדפן אי אפשר לחבר שעון. התקינו את האפליקציה על הטלפון ובצעו את ההוראות שם.',
       );
     }
 
@@ -141,6 +180,8 @@ class PlatformHeartRateSource implements HeartRateSourceLike {
     if (!configured) {
       return WatchConnectResult(success: false, message: _status);
     }
+
+    await _requestAndroidRuntimePerms();
 
     final hcReady = await _ensureHealthConnectReady();
     if (!hcReady) {
@@ -152,52 +193,62 @@ class PlatformHeartRateSource implements HeartRateSourceLike {
     }
 
     try {
-      final granted = await _health.requestAuthorization(
-        _types,
-        permissions: _permissions,
+      // Prefer only available types on this platform.
+      final types = <HealthDataType>[HealthDataType.HEART_RATE];
+      if (_health.isDataTypeAvailable(HealthDataType.RESTING_HEART_RATE)) {
+        types.add(HealthDataType.RESTING_HEART_RATE);
+      }
+      final perms = List<HealthDataAccess>.filled(
+        types.length,
+        HealthDataAccess.READ,
       );
 
-      // iOS may return true even when denied — verify when possible.
+      final granted = await _health.requestAuthorization(
+        types,
+        permissions: perms,
+      );
+
       bool reallyGranted = granted;
       try {
-        final has = await _health.hasPermissions(
-          _types,
-          permissions: _permissions,
-        );
+        final has = await _health.hasPermissions(types, permissions: perms);
         if (has == false) reallyGranted = false;
+        // null = unknown (common on iOS) — trust granted flag
       } catch (_) {}
 
       if (!reallyGranted) {
         _authorized = false;
-        _status = 'הרשאת דופק נדחתה — אפשר להפעיל בהגדרות הבריאות';
+        _status =
+            'הרשאת דופק נדחתה. אנדרואיד: Health Connect ← הרשאות לאפליקציה. אייפון: הגדרות ← בריאות.';
         _emitStatus();
         return WatchConnectResult(success: false, message: _status);
       }
 
       _authorized = true;
 
-      // History + background improve night reliability on Android.
       if (_isAndroid) {
         try {
-          await _health.requestHealthDataHistoryAuthorization();
+          if (await _health.isHealthDataHistoryAvailable()) {
+            await _health.requestHealthDataHistoryAuthorization();
+          }
         } catch (e) {
           debugPrint('history auth: $e');
         }
         try {
-          await _health.requestHealthDataInBackgroundAuthorization();
+          if (await _health.isHealthDataInBackgroundAvailable()) {
+            await _health.requestHealthDataInBackgroundAuthorization();
+          }
         } catch (e) {
           debugPrint('background auth: $e');
         }
       }
 
-      _status =
-          'הרשאה ניתנה — ממתין לסנכרון דופק מהשעון (Samsung Health → Health Connect)';
+      _status = 'הרשאה ניתנה — קורא דופק מהשעון…';
       _emitStatus();
 
       await start();
-      // Immediate aggressive polls after connect.
-      await _pollOnce();
-      _startFastBurst();
+      await _pollOnce(forceTypes: types);
+      // Burst for ~2 minutes
+      _startFastBurst(forceTypes: types, maxTicks: 60);
 
       if (hasUsableData) {
         _status = 'דופק חי מהשעון: ${_lastBpm!.round()} BPM';
@@ -208,10 +259,25 @@ class PlatformHeartRateSource implements HeartRateSourceLike {
         );
       }
 
+      if (_lastBpm != null && _lastSampleAt != null) {
+        final mins = DateTime.now().difference(_lastSampleAt!).inMinutes;
+        _status =
+            'נמצא דופק אחרון ${_lastBpm!.round()} BPM (לפני $mins דק׳). המתינו לסנכרון חדש או פתחו את הוראות Samsung.';
+        _emitStatus();
+        // Still count as success for permission path; emit last known for UI.
+        if (!_controller.isClosed) {
+          _controller.add(_lastBpm!);
+        }
+        return WatchConnectResult(
+          success: true,
+          message: _status,
+        );
+      }
+
       return const WatchConnectResult(
         success: true,
         message:
-            'הרשאה אושרה. אם אין דופק תוך דקה — ב־Samsung Health הפעילו סנכרון ל־Health Connect (דופק).',
+            'ההרשאה אושרה, אך עדיין אין דגימת דופק. פתחו את ההוראות: Samsung Health → Health Connect → דופק, ואז «רענן».',
       );
     } catch (e) {
       _authorized = false;
@@ -220,7 +286,7 @@ class PlatformHeartRateSource implements HeartRateSourceLike {
         _needsHealthConnectInstall = true;
         _status = 'יש להתקין / לעדכן Health Connect ואז לנסות שוב';
       } else {
-        _status = 'לא ניתן לבקש הרשאת דופק';
+        _status = 'שגיאה בחיבור: $e';
       }
       debugPrint('Health auth failed: $e');
       _emitStatus();
@@ -232,7 +298,6 @@ class PlatformHeartRateSource implements HeartRateSourceLike {
     }
   }
 
-  /// תאימות לאחור.
   Future<bool> requestAuthorization() async {
     final result = await connect();
     return result.success;
@@ -247,7 +312,7 @@ class PlatformHeartRateSource implements HeartRateSourceLike {
     if (!_authorized) {
       final result = await connect();
       if (!result.success) return;
-      return; // connect() already started polling
+      return;
     }
 
     final hcReady = await _ensureHealthConnectReady();
@@ -259,31 +324,45 @@ class PlatformHeartRateSource implements HeartRateSourceLike {
     _pollTimer = Timer.periodic(_pollEvery, (_) => _pollOnce());
   }
 
-  void _startFastBurst() {
+  void _startFastBurst({
+    List<HealthDataType>? forceTypes,
+    int maxTicks = 60,
+  }) {
     _fastPollTimer?.cancel();
     var ticks = 0;
     _fastPollTimer = Timer.periodic(_fastPollEvery, (t) async {
       ticks += 1;
-      await _pollOnce();
-      if (!_running || ticks >= 30 || hasUsableData) {
+      await _pollOnce(forceTypes: forceTypes);
+      if (!_running || ticks >= maxTicks || hasUsableData) {
         t.cancel();
         _fastPollTimer = null;
       }
     });
   }
 
-  Future<void> _pollOnce() async {
+  Future<void> _pollOnce({List<HealthDataType>? forceTypes}) async {
     if (!_running || !_authorized) return;
     try {
       final now = DateTime.now();
+      final types = forceTypes ??
+          [
+            HealthDataType.HEART_RATE,
+            if (_health.isDataTypeAvailable(HealthDataType.RESTING_HEART_RATE))
+              HealthDataType.RESTING_HEART_RATE,
+          ];
+
       final points = await _health.getHealthDataFromTypes(
-        types: _types,
+        types: types,
         startTime: now.subtract(_lookback),
         endTime: now,
       );
 
       final numeric = points
-          .where((p) => p.type == HealthDataType.HEART_RATE)
+          .where(
+            (p) =>
+                p.type == HealthDataType.HEART_RATE ||
+                p.type == HealthDataType.RESTING_HEART_RATE,
+          )
           .where((p) => p.value is NumericHealthValue)
           .toList()
         ..sort((a, b) => b.dateTo.compareTo(a.dateTo));
@@ -291,8 +370,8 @@ class PlatformHeartRateSource implements HeartRateSourceLike {
       if (numeric.isEmpty) {
         _status = hasUsableData
             ? 'דופק מהשעון: ${_lastBpm!.round()} BPM'
-            : 'מחובר ל־Health — ממתין לסנכרון דופק מהשעון '
-                '(בדקו שסנכרון דופק ל־Health Connect פעיל)';
+            : 'מחובר ל־Health — אין עדיין דגימת דופק. '
+                'בדקו סנכרון Samsung Health → Health Connect (דופק)';
         _emitStatus();
         return;
       }
@@ -312,7 +391,11 @@ class PlatformHeartRateSource implements HeartRateSourceLike {
         }
       } else {
         _status =
-            'נמצא דופק ישן (${bpm.round()} BPM, לפני ${age.inMinutes} דק׳) — ממתין לסנכרון חדש';
+            'דופק אחרון ${bpm.round()} BPM (לפני ${age.inMinutes} דק׳) — ממתין לסנכרון חדש';
+        // Emit so UI shows a number and detection can use until fresher arrives.
+        if (!_controller.isClosed) {
+          _controller.add(bpm);
+        }
       }
       _emitStatus();
     } catch (e) {
@@ -358,7 +441,6 @@ class PlatformHeartRateSource implements HeartRateSourceLike {
   }
 }
 
-/// ממשק מינימלי כדי לא לכפות health package על הדמו.
 abstract class HeartRateSourceLike {
   Stream<double> get heartRateBpm;
   bool get isLiveHardware;

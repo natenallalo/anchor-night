@@ -113,6 +113,10 @@ class HeartRateCoordinator implements HeartRateSource {
 
   Future<void> installHealthConnect() => platform.installHealthConnect();
 
+  Future<void> openHealthConnectStore() => platform.openHealthConnectStore();
+
+  Future<void> openSamsungHealth() => platform.openSamsungHealth();
+
   Future<void> useDemo() async {
     _mode = HeartRateMode.demo;
     _overrideBpm = null;

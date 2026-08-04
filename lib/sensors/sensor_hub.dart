@@ -63,6 +63,10 @@ class SensorHub {
 
   Future<void> installHealthConnect() => heartRate.installHealthConnect();
 
+  Future<void> openHealthConnectStore() => heartRate.openHealthConnectStore();
+
+  Future<void> openSamsungHealth() => heartRate.openSamsungHealth();
+
   Future<void> useDemoHeartRate() async {
     await heartRate.useDemo();
   }

@@ -8,6 +8,7 @@ import '../../domain/night_guard_state.dart';
 import '../legal/privacy_screen.dart';
 import '../settings/care_settings_screen.dart';
 import 'night_guard_controller.dart';
+import 'watch_setup_guide.dart';
 
 class NightGuardScreen extends StatelessWidget {
   final NightGuardController controller;
@@ -403,7 +404,13 @@ class _WatchConnectCard extends StatelessWidget {
               style: const TextStyle(color: AnchorTheme.danger, fontSize: 12),
             ),
           ],
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
+          TextButton.icon(
+            onPressed: () => showWatchSetupGuide(context),
+            icon: const Icon(Icons.menu_book_outlined, size: 18),
+            label: const Text('הוראות חיבור שעון (חשוב)'),
+          ),
+          const SizedBox(height: 8),
           if (needsInstall) ...[
             ElevatedButton.icon(
               onPressed: () async {
@@ -422,6 +429,27 @@ class _WatchConnectCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
           ],
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () async {
+                  await controller.openHealthConnectStore();
+                },
+                icon: const Icon(Icons.health_and_safety, size: 18),
+                label: const Text('Health Connect'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  await controller.openSamsungHealth();
+                },
+                icon: const Icon(Icons.watch, size: 18),
+                label: const Text('Samsung Health'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
           if (!linked)
             ElevatedButton.icon(
               onPressed: () async {
@@ -430,6 +458,11 @@ class _WatchConnectCard extends StatelessWidget {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(result.message)),
                 );
+                if (!result.success ||
+                    result.message.contains('Samsung') ||
+                    result.message.contains('אין')) {
+                  await showWatchSetupGuide(context);
+                }
               },
               icon: const Icon(Icons.link),
               label: const Text('חבר שעון / Health'),
