@@ -217,8 +217,9 @@ class PlatformHeartRateSource implements HeartRateSourceLike {
 
       if (!reallyGranted) {
         _authorized = false;
-        _status =
-            'הרשאת דופק נדחתה. אנדרואיד: Health Connect ← הרשאות לאפליקציה. אייפון: הגדרות ← בריאות.';
+        _status = _isAndroid
+            ? 'הרשאת דופק נדחתה. אשרו שוב ב־Health Connect ואז «חבר שעון».'
+            : 'הרשאת דופק נדחתה. אייפון: הגדרות ← בריאות ← עוגן לילה ← דופק.';
         _emitStatus();
         return WatchConnectResult(success: false, message: _status);
       }
@@ -262,7 +263,7 @@ class PlatformHeartRateSource implements HeartRateSourceLike {
       if (_lastBpm != null && _lastSampleAt != null) {
         final mins = DateTime.now().difference(_lastSampleAt!).inMinutes;
         _status =
-            'נמצא דופק אחרון ${_lastBpm!.round()} BPM (לפני $mins דק׳). המתינו לסנכרון חדש או פתחו את הוראות Samsung.';
+            'נמצא דופק אחרון ${_lastBpm!.round()} BPM (לפני $mins דק׳). שימו את השעון על היד והמתינו לסנכרון, או לחצו «רענן».';
         _emitStatus();
         // Still count as success for permission path; emit last known for UI.
         if (!_controller.isClosed) {
@@ -277,7 +278,7 @@ class PlatformHeartRateSource implements HeartRateSourceLike {
       return const WatchConnectResult(
         success: true,
         message:
-            'ההרשאה אושרה, אך עדיין אין דגימת דופק. פתחו את ההוראות: Samsung Health → Health Connect → דופק, ואז «רענן».',
+            'ההרשאה אושרה, אך עדיין אין דגימת דופק. ודאו שהשעון כותב דופק ל־Health Connect (באפליקציית השעון שכבר מותקנת), ואז «רענן».',
       );
     } catch (e) {
       _authorized = false;
@@ -370,8 +371,8 @@ class PlatformHeartRateSource implements HeartRateSourceLike {
       if (numeric.isEmpty) {
         _status = hasUsableData
             ? 'דופק מהשעון: ${_lastBpm!.round()} BPM'
-            : 'מחובר ל־Health — אין עדיין דגימת דופק. '
-                'בדקו סנכרון Samsung Health → Health Connect (דופק)';
+            : 'מחובר — אין עדיין דגימת דופק. '
+                'בדקו באפליקציית השעון ששיתוף דופק ל־Health Connect פעיל';
         _emitStatus();
         return;
       }

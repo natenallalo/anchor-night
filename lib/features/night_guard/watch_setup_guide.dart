@@ -4,7 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/theme.dart';
 
-/// הוראות מפורטות לחיבור שעון דרך Health Connect / Apple Health.
+/// הוראות פשוטות: חיבור אחד דרך Health Connect / Apple Health.
 Future<void> showWatchSetupGuide(BuildContext context) {
   return showModalBottomSheet<void>(
     context: context,
@@ -14,7 +14,8 @@ Future<void> showWatchSetupGuide(BuildContext context) {
       borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
     ),
     builder: (ctx) {
-      final isAndroid = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+      final isAndroid =
+          !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
       final isIos = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
       return SafeArea(
         child: Padding(
@@ -35,7 +36,7 @@ Future<void> showWatchSetupGuide(BuildContext context) {
                   ),
                 ),
                 const Text(
-                  'איך מחברים שעון דופק',
+                  'חיבור שעון — פשוט',
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
@@ -44,8 +45,8 @@ Future<void> showWatchSetupGuide(BuildContext context) {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'האפליקציה לא מתחברת ב־Bluetooth ישירות לשעון. '
-                  'היא קוראת דופק מ־Health Connect (אנדרואיד) או Apple Health (אייפון).',
+                  'עוגן לילה קוראת דופק ממרכז בריאות אחד בטלפון. '
+                  'אין צורך באפליקציות נוספות מעבר למה שכבר מגיע עם השעון.',
                   style: TextStyle(
                     color: AnchorTheme.textMuted,
                     height: 1.45,
@@ -55,13 +56,13 @@ Future<void> showWatchSetupGuide(BuildContext context) {
                 if (kIsWeb) ...[
                   const SizedBox(height: 14),
                   _warnBox(
-                    'בדפדפן אי אפשר לחבר שעון. צריך להתקין את האפליקציה על הטלפון (APK / חנות).',
+                    'בדפדפן אי אפשר לחבר שעון. התקינו את קובץ ה־APK על הטלפון.',
                   ),
                 ],
-                const SizedBox(height: 18),
                 if (isAndroid || kIsWeb) ...[
+                  const SizedBox(height: 18),
                   const Text(
-                    'אנדרואיד / Samsung',
+                    'אנדרואיד (כל סוגי השעונים)',
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
                       color: AnchorTheme.accent,
@@ -69,45 +70,43 @@ Future<void> showWatchSetupGuide(BuildContext context) {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const _Step(n: '1', text: 'התקינו Google Health Connect מחנות Play'),
+                  const _Step(
+                    n: '1',
+                    text:
+                        'לחצו «חבר שעון» באפליקציה ואשרו קריאת דופק. אם חסר — תיפתח התקנת Health Connect (אפליקציה אחת של Google, לרוב כבר מותקנת).',
+                  ),
                   const _Step(
                     n: '2',
                     text:
-                        'ב־Samsung Health: תפריט ← הגדרות ← Health Connect ← הפעילו סנכרון של «דופק» / Heart rate',
+                        'ודאו שהשעון כבר מחובר לטלפון דרך האפליקציה שהגיעה איתו (Galaxy Watch / Wear OS / Garmin / Fitbit וכו׳). אין צורך להוריד אפליקציות נוספות רק בשביל עוגן לילה.',
                   ),
                   const _Step(
                     n: '3',
                     text:
-                        'ודאו שהשעון מחובר לטלפון ושיש מדידת דופק פעילה (שימו את השעון על היד ל־30 שניות)',
+                        'באפליקציית השעון שלכם: הפעילו שיתוף דופק ל־Health Connect (לרוב בהגדרות / Connected apps).',
                   ),
                   const _Step(
                     n: '4',
                     text:
-                        'חזרו ל־«עוגן לילה» ← חבר שעון / Health ← אשרו הרשאת דופק',
+                        'שימו את השעון על היד ל־30 שניות, חזרו לכאן ולחצו «רענן קריאת דופק».',
                   ),
-                  const _Step(
-                    n: '5',
-                    text:
-                        'אם אין דופק: לחצו «רענן קריאת דופק». לפעמים הסנכרון לוקח 1–2 דקות',
+                  const SizedBox(height: 10),
+                  const Text(
+                    'טיפ: Galaxy Watch משתמש ב־Samsung Health שכבר מותקן ברוב מכשירי Samsung. '
+                    'Wear OS / Pixel Watch לרוב כותבים ישירות ל־Health Connect.',
+                    style: TextStyle(
+                      color: AnchorTheme.textMuted,
+                      height: 1.4,
+                      fontSize: 12,
+                    ),
                   ),
                   const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: () => _open(
-                          'https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata',
-                        ),
-                        icon: const Icon(Icons.download),
-                        label: const Text('Health Connect'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: () => _open('samsunghealth://'),
-                        icon: const Icon(Icons.favorite),
-                        label: const Text('Samsung Health'),
-                      ),
-                    ],
+                  OutlinedButton.icon(
+                    onPressed: () => _open(
+                      'https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata',
+                    ),
+                    icon: const Icon(Icons.download),
+                    label: const Text('התקן / עדכן Health Connect'),
                   ),
                 ],
                 if (isIos || kIsWeb) ...[
@@ -123,16 +122,17 @@ Future<void> showWatchSetupGuide(BuildContext context) {
                   const SizedBox(height: 8),
                   const _Step(
                     n: '1',
-                    text: 'ודאו ש־Apple Watch מסונכרן וכותב דופק ל־אפליקציית «בריאות»',
+                    text:
+                        'ודאו שהשעון מסונכרן וכותב דופק לאפליקציית «בריאות» (כבר מותקנת).',
                   ),
                   const _Step(
                     n: '2',
-                    text: 'ב־«עוגן לילה» לחצו חבר שעון / Health ואשרו קריאת דופק',
+                    text: 'ב־«עוגן לילה» לחצו «חבר שעון» ואשרו קריאת דופק.',
                   ),
                   const _Step(
                     n: '3',
                     text:
-                        'אם נחסם: הגדרות ← פרטיות ובטיחות ← בריאות ← עוגן לילה ← דופק',
+                        'אם נחסם: הגדרות ← פרטיות ובטיחות ← בריאות ← עוגן לילה ← דופק.',
                   ),
                 ],
                 const SizedBox(height: 18),
@@ -172,9 +172,7 @@ Future<void> _open(String url) async {
   final uri = Uri.parse(url);
   try {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
-  } catch (_) {
-    // ignore
-  }
+  } catch (_) {}
 }
 
 class _Step extends StatelessWidget {

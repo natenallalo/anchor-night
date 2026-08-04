@@ -389,8 +389,8 @@ class _WatchConnectCard extends StatelessWidget {
             live
                 ? 'המערכת משתמשת בדופק חי לזיהוי מדויק יותר.'
                 : linked
-                    ? 'ההרשאה פעילה — ממתין לסנכרון דופק. ב־Samsung: Samsung Health → הגדרות → Health Connect → דופק.'
-                    : 'החיבור הוא דרך Health Connect / Apple Health (לא Bluetooth ישיר). בלי זה הזיהוי מוגבל.',
+                    ? 'ההרשאה פעילה — ממתין לסנכרון מהשעון. שימו את השעון על היד ולחצו «רענן».'
+                    : 'לחיצה אחת: «חבר שעון». עובד עם רוב השעונים דרך מרכז הבריאות בטלפון — בלי אפליקציות מיותרות.',
             style: const TextStyle(
               color: AnchorTheme.textPrimary,
               fontSize: 13,
@@ -405,12 +405,6 @@ class _WatchConnectCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 10),
-          TextButton.icon(
-            onPressed: () => showWatchSetupGuide(context),
-            icon: const Icon(Icons.menu_book_outlined, size: 18),
-            label: const Text('הוראות חיבור שעון (חשוב)'),
-          ),
-          const SizedBox(height: 8),
           if (needsInstall) ...[
             ElevatedButton.icon(
               onPressed: () async {
@@ -419,37 +413,16 @@ class _WatchConnectCard extends StatelessWidget {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text(
-                      'נפתחה חנות Play — התקינו Health Connect ואז לחצו שוב «חבר שעון»',
+                      'נפתחה חנות Play — התקינו Health Connect (פעם אחת) ואז לחצו «חבר שעון»',
                     ),
                   ),
                 );
               },
               icon: const Icon(Icons.download),
-              label: const Text('התקן Health Connect'),
+              label: const Text('התקן Health Connect (פעם אחת)'),
             ),
             const SizedBox(height: 8),
           ],
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              OutlinedButton.icon(
-                onPressed: () async {
-                  await controller.openHealthConnectStore();
-                },
-                icon: const Icon(Icons.health_and_safety, size: 18),
-                label: const Text('Health Connect'),
-              ),
-              OutlinedButton.icon(
-                onPressed: () async {
-                  await controller.openSamsungHealth();
-                },
-                icon: const Icon(Icons.watch, size: 18),
-                label: const Text('Samsung Health'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
           if (!linked)
             ElevatedButton.icon(
               onPressed: () async {
@@ -458,18 +431,16 @@ class _WatchConnectCard extends StatelessWidget {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(result.message)),
                 );
-                if (!result.success ||
-                    result.message.contains('Samsung') ||
-                    result.message.contains('אין')) {
+                if (!result.success || result.message.contains('אין')) {
                   await showWatchSetupGuide(context);
                 }
               },
               icon: const Icon(Icons.link),
-              label: const Text('חבר שעון / Health'),
+              label: const Text('חבר שעון'),
             )
           else ...[
             if (!live)
-              TextButton.icon(
+              ElevatedButton.icon(
                 onPressed: () async {
                   final result = await controller.connectWatch();
                   if (!context.mounted) return;
@@ -480,6 +451,7 @@ class _WatchConnectCard extends StatelessWidget {
                 icon: const Icon(Icons.refresh, size: 18),
                 label: const Text('רענן קריאת דופק'),
               ),
+            const SizedBox(height: 8),
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
                 foregroundColor: AnchorTheme.textPrimary,
@@ -491,6 +463,11 @@ class _WatchConnectCard extends StatelessWidget {
               label: const Text('נתק ועבור לדמו'),
             ),
           ],
+          TextButton.icon(
+            onPressed: () => showWatchSetupGuide(context),
+            icon: const Icon(Icons.menu_book_outlined, size: 18),
+            label: const Text('הוראות קצרות לפי סוג שעון'),
+          ),
         ],
       ),
     );
